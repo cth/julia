@@ -225,7 +225,7 @@ static int jl_layout_isbits(jl_value_t *ty)
     return 0;
 }
 
-static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
+static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
 {
     if (jl_is_uniontype(ty)) {
         unsigned na = jl_union_isbits(((jl_uniontype_t*)ty)->a, nbytes, align);
@@ -247,6 +247,11 @@ static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
     }
     return 0;
 }
+
+unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
+ {
+     return union_isbits(ty, nbytes, align);
+ }
 
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
