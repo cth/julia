@@ -27,7 +27,7 @@ static inline int store_unboxed(jl_value_t *el_type) // jl_isbits
     size_t fsz = 0, al = 0;
     return (jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
         ((jl_datatype_t*)el_type)->layout &&
-        ((jl_datatype_t*)el_type)->layout->npointers == 0) || jl_union_isbits(el_type, fsz, al);
+        ((jl_datatype_t*)el_type)->layout->npointers == 0) || jl_union_isbits(el_type, &fsz, &al);
 }
 
 int jl_array_store_unboxed(jl_value_t *el_type)
@@ -80,6 +80,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         }
         jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(atype));
         if (jl_is_uniontype(el_type)) {
+            printf("here 3");
             // allocate an extra sel byte for each element
             tot += nel;
         }
@@ -503,6 +504,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     if (!a->flags.ptrarray) {
         jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
         if (jl_is_uniontype(el_type)) {
+            printf("here 1");
             uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
             el_type = jl_nth_union_component(el_type, sel);
             if (jl_is_datatype_singleton((jl_datatype_t*)el_type))
@@ -568,6 +570,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
     }
     if (!a->flags.ptrarray) {
         if (jl_is_uniontype(el_type)) {
+            printf("here 2");
             uint8_t *psel = &((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
             unsigned nth = 0;
             if (!jl_find_union_component(el_type, jl_typeof(rhs), &nth))
