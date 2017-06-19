@@ -78,12 +78,6 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
             // extra byte for all julia allocated byte arrays
             tot++;
         }
-        jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(atype));
-        if (jl_is_uniontype(el_type)) {
-            printf("here 3");
-            // allocate an extra sel byte for each element
-            tot += nel;
-        }
     }
     else {
         wideint_t prod = (wideint_t)sizeof(void*) * (wideint_t)nel;
@@ -155,7 +149,7 @@ static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *
         if (jl_is_uniontype(el_type)) {
             size_t fsz = 0, al = 0;
             unsigned countbits = jl_union_isbits(el_type, &fsz, &al);
-            elsz = fsz;
+            elsz = fsz + 1;
         }
         else {
             elsz = jl_datatype_size(el_type);
@@ -504,8 +498,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     if (!a->flags.ptrarray) {
         jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
         if (jl_is_uniontype(el_type)) {
-            printf("here 1");
-            uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
+            uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * (a->elsize-1) + i];
             el_type = jl_nth_union_component(el_type, sel);
             if (jl_is_datatype_singleton((jl_datatype_t*)el_type))
                 return ((jl_datatype_t*)el_type)->instance;
@@ -570,8 +563,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
     }
     if (!a->flags.ptrarray) {
         if (jl_is_uniontype(el_type)) {
-            printf("here 2");
-            uint8_t *psel = &((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
+            uint8_t *psel = &((uint8_t*)a->data)[jl_array_len(a) * (a->elsize-1) + i];
             unsigned nth = 0;
             if (!jl_find_union_component(el_type, jl_typeof(rhs), &nth))
                 assert(0 && "invalid field assignment to isbits union");
