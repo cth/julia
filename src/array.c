@@ -55,7 +55,6 @@ static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
 
 static inline int store_unboxed(jl_value_t *el_type) // jl_isbits
 {
-    printf("checking should store_unboxed");
     return (jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
         ((jl_datatype_t*)el_type)->layout &&
         ((jl_datatype_t*)el_type)->layout->npointers == 0) || jl_union_isbits(el_type, NULL, NULL);
