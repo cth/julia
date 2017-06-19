@@ -21,12 +21,44 @@ extern "C" {
 #define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
 
 // array constructors ---------------------------------------------------------
+static int jl_layout_isbits(jl_value_t *ty)
+{
+    if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
+        if (((jl_datatype_t*)ty)->layout) // layout check handles possible layout recursion
+            return 1;
+    }
+    return 0;
+}
+
+static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
+{
+    if (jl_is_uniontype(ty)) {
+        unsigned na = jl_union_isbits(((jl_uniontype_t*)ty)->a, nbytes, align);
+        if (na == 0)
+            return 0;
+        unsigned nb = jl_union_isbits(((jl_uniontype_t*)ty)->b, nbytes, align);
+        if (nb == 0)
+            return 0;
+        return na + nb;
+    }
+    if (jl_layout_isbits(ty)) {
+        size_t sz = jl_datatype_size(ty);
+        size_t al = ((jl_datatype_t*)ty)->layout->alignment;
+        if (*nbytes < sz)
+            *nbytes = sz;
+        if (*align < al)
+            *align = al;
+        return 1;
+    }
+    return 0;
+}
 
 static inline int store_unboxed(jl_value_t *el_type) // jl_isbits
 {
-    return jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
+    printf("checking should store_unboxed");
+    return (jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
         ((jl_datatype_t*)el_type)->layout &&
-        ((jl_datatype_t*)el_type)->layout->npointers == 0;
+        ((jl_datatype_t*)el_type)->layout->npointers == 0) || jl_union_isbits(el_type, NULL, NULL);
 }
 
 int jl_array_store_unboxed(jl_value_t *el_type)
@@ -486,6 +518,12 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     jl_value_t *elt;
     if (!a->flags.ptrarray) {
         jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
+        if (jl_is_uniontype(el_type)) {
+            uint8_t sel = ((uint8_t*)a->data)[i*a->elsize + jl_datatype_size(el_type) - 1];
+            el_type = jl_nth_union_component(el_type, sel);
+            if (jl_is_datatype_singleton((jl_datatype_t*)el_type))
+                return ((jl_datatype_t*)el_type)->instance;
+        }
         elt = jl_new_bits(el_type, &((char*)a->data)[i*a->elsize]);
     }
     else {
@@ -545,6 +583,15 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
             jl_type_error("arrayset", el_type, rhs);
     }
     if (!a->flags.ptrarray) {
+        if (jl_is_uniontype(el_type)) {
+            uint8_t *psel = &((uint8_t*)a->data)[i*a->elsize + jl_datatype_size(el_type) - 1];
+            unsigned nth = 0;
+            if (!jl_find_union_component(el_type, jl_typeof(rhs), &nth))
+                assert(0 && "invalid field assignment to isbits union");
+            *psel = nth;
+            if (jl_is_datatype_singleton((jl_datatype_t*)el_type))
+                return;
+        }
         jl_assign_bits(&((char*)a->data)[i*a->elsize], rhs);
     }
     else {
